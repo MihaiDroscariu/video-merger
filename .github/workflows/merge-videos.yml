@@ -115,3 +115,7 @@ jobs:
         echo "The merged video is now available on Cloudinary!" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "🔗 **Direct Link:** [$CLOUDINARY_URL]($CLOUDINARY_URL)" >> $GITHUB_STEP_SUMMARY
+
+    - name: Set Output
+  id: upload
+  run: echo "cloudinary_url=$CLOUDINARY_URL" >> $GITHUB_OUTPUT
