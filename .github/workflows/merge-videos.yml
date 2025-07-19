@@ -1,0 +1,82 @@
+name: Merge Videos
+
+on:
+  workflow_dispatch:
+    inputs:
+      video_urls:
+        description: 'Comma-separated video URLs'
+        required: true
+        type: string
+      output_name:
+        description: 'Output filename (without extension)'
+        required: false
+        default: 'merged_video'
+        type: string
+
+jobs:
+  merge-videos:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Create temp directories
+      run: |
+        mkdir -p temp_videos
+        mkdir -p output
+    
+    - name: Download videos
+      run: |
+        IFS=',' read -ra URLS <<< "${{ github.event.inputs.video_urls }}"
+        counter=1
+        for url in "${URLS[@]}"; do
+          url=$(echo "$url" | xargs)  # trim whitespace
+          echo "Downloading video $counter from: $url"
+          curl -L -o "temp_videos/video_$counter.mp4" "$url"
+          counter=$((counter+1))
+        done
+    
+    - name: List downloaded files
+      run: |
+        echo "Downloaded files:"
+        ls -la temp_videos/
+    
+    - name: Create FFmpeg input file list
+      run: |
+        > input_list.txt
+        for file in temp_videos/video_*.mp4; do
+          echo "file '$file'" >> input_list.txt
+        done
+        echo "Input list contents:"
+        cat input_list.txt
+    
+    - name: Merge videos with FFmpeg
+      run: |
+        ffmpeg -f concat -safe 0 -i input_list.txt -c copy "output/${{ github.event.inputs.output_name }}.mp4"
+        echo "Merge completed!"
+    
+    - name: Check output file
+      run: |
+        echo "Output file info:"
+        ls -la output/
+        if [ -f "output/${{ github.event.inputs.output_name }}.mp4" ]; then
+          ffmpeg -i "output/${{ github.event.inputs.output_name }}.mp4" 2>&1 | head -20
+        fi
+    
+    - name: Upload merged video as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.event.inputs.output_name }}
+        path: output/${{ github.event.inputs.output_name }}.mp4
+        retention-days: 7
+    
+    - name: Create output summary
+      run: |
+        echo "## Video Merge Complete! 🎥" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Output file:** ${{ github.event.inputs.output_name }}.mp4" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "The merged video is available as an artifact in this workflow run." >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Download URL will be available for 7 days**" >> $GITHUB_STEP_SUMMARY
