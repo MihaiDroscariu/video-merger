@@ -1,5 +1,4 @@
 name: Merge Videos
-
 on:
   workflow_dispatch:
     inputs:
@@ -12,20 +11,26 @@ on:
         required: false
         default: 'merged_video'
         type: string
+      cloudinary_cloud_name:
+        description: 'Cloudinary cloud name'
+        required: false
+        default: 'dklqe2gdb'
+        type: string
 
 jobs:
   merge-videos:
     runs-on: ubuntu-latest
-
+    outputs:
+      cloudinary_url: ${{ steps.upload.outputs.url }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
+      
     - name: Create temp directories
       run: |
         mkdir -p temp_videos
         mkdir -p output
-
+        
     - name: Download videos
       run: |
         IFS=',' read -ra URLS <<< "${{ github.event.inputs.video_urls }}"
@@ -36,12 +41,12 @@ jobs:
           curl -L -o "temp_videos/video_$counter.mp4" "$url"
           counter=$((counter+1))
         done
-
+        
     - name: List downloaded files
       run: |
         echo "Downloaded files:"
         ls -la temp_videos/
-
+        
     - name: Create FFmpeg input file list
       run: |
         > input_list.txt
@@ -50,17 +55,17 @@ jobs:
         done
         echo "Input list contents:"
         cat input_list.txt
-
+        
     - name: Install FFmpeg
       run: |
         sudo apt update
         sudo apt install -y ffmpeg
-
+        
     - name: Merge videos with FFmpeg
       run: |
         ffmpeg -f concat -safe 0 -i input_list.txt -c copy "output/${{ github.event.inputs.output_name }}.mp4"
         echo "Merge completed!"
-
+        
     - name: Check output file
       run: |
         echo "Output file info:"
@@ -68,20 +73,45 @@ jobs:
         if [ -f "output/${{ github.event.inputs.output_name }}.mp4" ]; then
           ffmpeg -i "output/${{ github.event.inputs.output_name }}.mp4" 2>&1 | head -20
         fi
-
-    - name: Upload merged video as artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ github.event.inputs.output_name }}
-        path: output/${{ github.event.inputs.output_name }}.mp4
-        retention-days: 7
-
+        
+    - name: Upload to Cloudinary
+      id: upload
+      run: |
+        echo "Uploading to Cloudinary..."
+        
+        # Upload to Cloudinary (using unsigned upload preset)
+        RESPONSE=$(curl -X POST \
+          -F "file=@output/${{ github.event.inputs.output_name }}.mp4" \
+          -F "upload_preset=ml_default" \
+          -F "resource_type=video" \
+          -F "public_id=${{ github.event.inputs.output_name }}" \
+          "https://api.cloudinary.com/v1_1/${{ github.event.inputs.cloudinary_cloud_name }}/video/upload")
+        
+        echo "Cloudinary response: $RESPONSE"
+        
+        # Extract the secure_url from the response using jq
+        sudo apt-get install -y jq
+        CLOUDINARY_URL=$(echo "$RESPONSE" | jq -r '.secure_url')
+        
+        if [ "$CLOUDINARY_URL" != "null" ] && [ "$CLOUDINARY_URL" != "" ]; then
+          echo "Upload successful!"
+          echo "Video URL: $CLOUDINARY_URL"
+          echo "url=$CLOUDINARY_URL" >> $GITHUB_OUTPUT
+          echo "CLOUDINARY_URL=$CLOUDINARY_URL" >> $GITHUB_ENV
+        else
+          echo "Upload failed or URL not found in response"
+          echo "Response was: $RESPONSE"
+          exit 1
+        fi
+        
     - name: Create output summary
       run: |
         echo "## Video Merge Complete! 🎥" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Output file:** ${{ github.event.inputs.output_name }}.mp4" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "The merged video is available as an artifact in this workflow run." >> $GITHUB_STEP_SUMMARY
+        echo "**Cloudinary URL:** $CLOUDINARY_URL" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Download URL will be available for 7 days**" >> $GITHUB_STEP_SUMMARY
+        echo "The merged video is now available on Cloudinary!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "🔗 **Direct Link:** [$CLOUDINARY_URL]($CLOUDINARY_URL)" >> $GITHUB_STEP_SUMMARY
