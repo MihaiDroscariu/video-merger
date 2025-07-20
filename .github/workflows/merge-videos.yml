@@ -66,12 +66,12 @@ jobs:
         ffmpeg -f concat -safe 0 -i input_list.txt -c copy "output/${{ github.event.inputs.output_name }}_raw.mp4"
         echo "Merge completed!"
         
-    - name: Convert merged video to 9:16 aspect ratio
+    - name: Convert merged video to 9:16 aspect ratio (zoom/crop)
       run: |
         ffmpeg -i "output/${{ github.event.inputs.output_name }}_raw.mp4" \
-          -vf "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2" \
+          -vf "scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280" \
           -c:a copy "output/${{ github.event.inputs.output_name }}.mp4"
-        echo "Converted to 9:16!"
+        echo "Converted to 9:16 (cropped)!"
         
     - name: Check output file
       run: |
