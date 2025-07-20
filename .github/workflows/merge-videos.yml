@@ -69,7 +69,7 @@ jobs:
     - name: Convert merged video to 9:16 aspect ratio
       run: |
         ffmpeg -i "output/${{ github.event.inputs.output_name }}_raw.mp4" \
-          -vf "scale=ih*9/16:ih:force_original_aspect_ratio=decrease,pad=ih*9/16:ih:(ow-iw)/2:(oh-ih)/2" \
+          -vf "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2" \
           -c:a copy "output/${{ github.event.inputs.output_name }}.mp4"
         echo "Converted to 9:16!"
         
